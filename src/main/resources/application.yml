@@ -39,9 +39,9 @@ spring:
       ack-mode: manual
       missing-topics-fatal: false
 
-# -------------------------
+
 # FRAUD ENGINE CONFIG
-# -------------------------
+
 fraud:
   rules:
     high-value:
@@ -58,16 +58,16 @@ fraud:
     attempts: 3
     backoff-ms: 2000
 
-# -------------------------
-# KAFKA TOPICS (FIXED PATH)
-# -------------------------
+
+# KAFKA TOPICS
+
 topics:
   transaction: transaction-topic
   dlq: transaction-dlq
 
-# -------------------------
+
 # LOGGING
-# -------------------------
+
 logging:
   level:
     root: INFO
