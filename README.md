@@ -14,6 +14,33 @@ It supports:
 
 ---
 
+##  Running the Project
+
+
+1. Build JAR
+ 
+    mvn clean install 
+
+2. Start Services
+
+    docker-compose up --build
+
+3. REST API
+
+    http://localhost:8080/api/fraud/check
+
+4. H2 Console
+
+    http://localhost:8080/h2-console
+
+5. JDBC URL:
+
+    jdbc:h2:mem:frauddb
+
+    Username: sa
+
+
+
 ## ⚙️ Tech Stack
 
 - Java 17
@@ -37,44 +64,7 @@ It supports:
 
 ---
 
-##  Running the Project
 
-###
-```bash
-
-1. Build JAR
- 
-mvn clean install 
-
-2. Start Services
-
-docker-compose up --build
-
-3. REST API
-
-http://localhost:8080/api/fraud/check
-
-4. H2 Console
-
-http://localhost:8080/h2-console
-
-JDBC URL:
-
-jdbc:h2:mem:frauddb
-
-Username: sa
-
-
-
-# 🧪 Kafka End-to-End Test Scenarios
-
----
-
-## ✅ 1. Submit Transaction (Async)
-
-### Request
-
-```bash
 ############################
 # 🚀 1. SUBMIT TRANSACTION
 ############################
@@ -193,15 +183,15 @@ curl http://localhost:8080/status/3/details
 # ⚡ 5. VELOCITY FRAUD TEST
 ############################
 
-for i in {1..6}; do
-  curl -s -X POST http://localhost:8080/api/fraud/check \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "speed-user",
-    "amount": 10,
-    "location": "ZA"
-  }'
-done
+
+curl -s -X POST http://localhost:8080/api/fraud/check \
+-H "Content-Type: application/json" \
+-d '{
+"userId": "speed-user",
+"amount": 10,
+"location": "ZA"
+}'
+
 
 curl http://localhost:8080/status/10/details
 
@@ -246,9 +236,6 @@ curl -X POST http://localhost:8080/api/fraud/check \
   "location": ""
 }'
 
-# Current response (needs validation fix)
-{
-  "transactionId": 12,
-  "status": "PROCESSING"
-}
-```
+{"status":"FAILED","errors":["amount: amount must be greater than 0","location: location is required","userId: userId is required"]}
+
+
