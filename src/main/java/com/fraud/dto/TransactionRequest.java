@@ -13,12 +13,12 @@ import lombok.NoArgsConstructor;
 @Builder
 public class TransactionRequest {
 
-    @NotBlank
+    @NotBlank(message = "userId is required")
     private String userId;
 
-    @Positive
+    @Positive(message = "amount must be greater than 0")
     private double amount;
 
-    @NotBlank
+    @NotBlank(message = "location is required")
     private String location;
 }

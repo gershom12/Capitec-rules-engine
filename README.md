@@ -62,9 +62,23 @@ JDBC URL:
 
 jdbc:h2:mem:frauddb
 
+Username: sa
 
-🧪 CURL TEST SCENARIOS
-✅ 1. Normal Transaction (No Fraud)
+
+
+# 🧪 Kafka End-to-End Test Scenarios
+
+---
+
+## ✅ 1. Submit Transaction (Async)
+
+### Request
+
+```bash
+############################
+# 🚀 1. SUBMIT TRANSACTION
+############################
+
 curl -X POST http://localhost:8080/api/fraud/check \
 -H "Content-Type: application/json" \
 -d '{
@@ -73,37 +87,157 @@ curl -X POST http://localhost:8080/api/fraud/check \
   "location": "ZA"
 }'
 
-🔥 2. High Value Fraud Trigger
+# Response
+{
+  "transactionId": 1,
+  "status": "PROCESSING",
+  "message": "Transaction queued for processing"
+}
+
+############################
+# 🔄 2. CHECK STATUS
+############################
+
+curl http://localhost:8080/status/1
+
+# Processing
+{
+  "transactionId": 1,
+  "status": "PROCESSING",
+  "fraudDetected": false,
+  "alertCount": 0
+}
+
+# Completed
+{
+  "transactionId": 1,
+  "status": "COMPLETED",
+  "fraudDetected": false,
+  "alertCount": 0
+}
+
+############################
+# 📄 2.1 TRANSACTION DETAILS
+############################
+
+curl http://localhost:8080/status/1/details
+
+{
+  "transactionId": 1,
+  "userId": "user1",
+  "amount": 100,
+  "location": "ZA",
+  "status": "COMPLETED",
+  "fraudDetected": false,
+  "rulesTriggered": [],
+  "alerts": []
+}
+
+############################
+# 🔥 3. HIGH VALUE FRAUD
+############################
+
 curl -X POST http://localhost:8080/api/fraud/check \
 -H "Content-Type: application/json" \
 -d '{
-  "userId": "user1",
-  "amount": 20000,
+  "userId": "rich-user",
+  "amount": 50000,
   "location": "ZA"
 }'
 
-🌍 3. Location Mismatch Fraud
+curl http://localhost:8080/status/2/details
+
+{
+  "transactionId": 2,
+  "fraudDetected": true,
+  "rulesTriggered": ["HIGH_VALUE"],
+  "alerts": [
+    {
+      "id": 1,
+      "transactionId": 2,
+      "rulesTriggered": "HIGH_VALUE",
+      "createdAt": "2026-05-05T23:10:00"
+    }
+  ]
+}
+
+############################
+# 🌍 4. LOCATION FRAUD
+############################
+
 curl -X POST http://localhost:8080/api/fraud/check \
 -H "Content-Type: application/json" \
 -d '{
-  "userId": "user1",
+  "userId": "user2",
   "amount": 500,
   "location": "US"
 }'
 
-⚡ 4. Velocity Rule Trigger (Rapid Requests)
+curl http://localhost:8080/status/3/details
 
-Run multiple times quickly:
+{
+  "transactionId": 3,
+  "fraudDetected": true,
+  "rulesTriggered": ["LOCATION_MISMATCH"],
+  "alerts": [
+    {
+      "id": 2,
+      "transactionId": 3,
+      "rulesTriggered": "LOCATION_MISMATCH",
+      "createdAt": "2026-05-05T23:10:00"
+    }
+  ]
+}
+
+############################
+# ⚡ 5. VELOCITY FRAUD TEST
+############################
+
+for i in {1..6}; do
+  curl -s -X POST http://localhost:8080/api/fraud/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "speed-user",
+    "amount": 10,
+    "location": "ZA"
+  }'
+done
+
+curl http://localhost:8080/status/10/details
+
+{
+  "transactionId": 10,
+  "fraudDetected": true,
+  "rulesTriggered": ["VELOCITY"]
+}
+
+############################
+# 💥 6. EXTREME FRAUD
+############################
 
 curl -X POST http://localhost:8080/api/fraud/check \
 -H "Content-Type: application/json" \
 -d '{
-  "userId": "velocity-user",
-  "amount": 50,
-  "location": "ZA"
+  "userId": "fraudster",
+  "amount": 99999,
+  "location": "US"
 }'
 
-❌ 5. Invalid Payload (Validation Test)
+curl http://localhost:8080/status/11/details
+
+{
+  "transactionId": 11,
+  "fraudDetected": true,
+  "rulesTriggered": [
+    "HIGH_VALUE",
+    "LOCATION_MISMATCH"
+  ]
+}
+
+############################
+# ❌ 7. INVALID PAYLOAD
+############################
+
 curl -X POST http://localhost:8080/api/fraud/check \
 -H "Content-Type: application/json" \
 -d '{
@@ -112,12 +246,9 @@ curl -X POST http://localhost:8080/api/fraud/check \
   "location": ""
 }'
 
-💥 6. Extreme Fraud (All Rules Triggered)
-curl -X POST http://localhost:8080/api/fraud/check \
--H "Content-Type: application/json" \
--d '{
-  "userId": "fraud-user",
-  "amount": 99999,
-  "location": "US"
-}'
-
+# Current response (needs validation fix)
+{
+  "transactionId": 12,
+  "status": "PROCESSING"
+}
+```

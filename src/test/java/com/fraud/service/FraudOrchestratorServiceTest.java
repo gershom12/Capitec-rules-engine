@@ -1,18 +1,20 @@
 package com.fraud.service;
 
-import com.fraud.dto.*;
+import com.fraud.dto.RuleResult;
+import com.fraud.dto.TransactionRequest;
 import com.fraud.entity.Transaction;
-import com.fraud.exception.FraudProcessingException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(org.mockito.junit.jupiter.MockitoExtension.class)
+@ExtendWith(MockitoExtension.class)
 class FraudOrchestratorServiceTest {
 
     @Mock
@@ -24,64 +26,88 @@ class FraudOrchestratorServiceTest {
     @InjectMocks
     private FraudOrchestratorService orchestrator;
 
+    // ----------------------------
+    // 1. NO FRAUD SCENARIO
+    // ----------------------------
     @Test
-    void should_detect_fraud_and_save_alert() {
-        TransactionRequest request = new TransactionRequest("user1", 15000, "ZA");
+    void should_complete_transaction_when_no_fraud_detected() {
 
-        Transaction tx = Transaction.builder().id(1L).build();
+        Long txId = 1L;
+        Transaction tx = Transaction.builder().id(txId).build();
 
-        List<RuleResult> results = List.of(
-                new RuleResult("HIGH_VALUE", true, "Triggered")
+        when(fraudService.getById(txId)).thenReturn(tx);
+
+        when(ruleEngine.evaluate(tx)).thenReturn(
+                List.of(new RuleResult("HIGH_VALUE", false, "OK"))
         );
 
-        when(fraudService.saveTransaction(request)).thenReturn(tx);
-        when(ruleEngine.evaluate(tx)).thenReturn(results);
+        orchestrator.process(txId, new TransactionRequest());
 
-        FraudResponse response = orchestrator.process(request);
-
-        assertTrue(response.isFraudDetected());
-        verify(fraudService).saveAlert(tx, results);
+        verify(fraudService).getById(txId);
+        verify(ruleEngine).evaluate(tx);
+        verify(fraudService).markCompleted(tx);
+        verify(fraudService, never()).saveAlert(any(), any());
+        verify(fraudService, never()).markFailed(anyLong());
     }
 
+    // ----------------------------
+    // 2. FRAUD DETECTED SCENARIO
+    // ----------------------------
     @Test
-    void should_not_save_alert_when_no_fraud() {
-        TransactionRequest request = new TransactionRequest("user1", 100, "ZA");
+    void should_save_alert_when_fraud_detected() {
 
-        Transaction tx = Transaction.builder().id(1L).build();
+        Long txId = 2L;
+        Transaction tx = Transaction.builder().id(txId).build();
 
-        when(fraudService.saveTransaction(request)).thenReturn(tx);
+        when(fraudService.getById(txId)).thenReturn(tx);
+
+        when(ruleEngine.evaluate(tx)).thenReturn(
+                List.of(new RuleResult("HIGH_VALUE", true, "Triggered"))
+        );
+
+        orchestrator.process(txId, new TransactionRequest());
+
+        verify(fraudService).saveAlert(eq(tx), any());
+        verify(fraudService).markCompleted(tx);
+    }
+
+    // ----------------------------
+    // 3. FAILURE SCENARIO
+    // ----------------------------
+    @Test
+    void should_mark_failed_when_exception_occurs() {
+
+        Long txId = 3L;
+
+        when(fraudService.getById(txId))
+                .thenThrow(new RuntimeException("DB failure"));
+
+        assertThrows(RuntimeException.class,
+                () -> orchestrator.process(txId, new TransactionRequest()));
+
+        verify(fraudService).markFailed(txId);
+    }
+
+    // ----------------------------
+    // 4. MULTIPLE RULES SCENARIO
+    // ----------------------------
+    @Test
+    void should_handle_multiple_rules_correctly() {
+
+        Long txId = 4L;
+        Transaction tx = Transaction.builder().id(txId).build();
+
+        when(fraudService.getById(txId)).thenReturn(tx);
+
         when(ruleEngine.evaluate(tx)).thenReturn(List.of(
-                new RuleResult("HIGH_VALUE", false, "OK")
+                new RuleResult("HIGH_VALUE", true, "High value"),
+                new RuleResult("LOCATION", false, "OK"),
+                new RuleResult("VELOCITY", false, "OK")
         ));
 
-        FraudResponse response = orchestrator.process(request);
+        orchestrator.process(txId, new TransactionRequest());
 
-        assertFalse(response.isFraudDetected());
-        verify(fraudService, never()).saveAlert(any(), any());
-    }
-
-    @Test
-    void should_throw_exception_when_transaction_save_fails() {
-        TransactionRequest request = new TransactionRequest("user1", 100, "ZA");
-
-        when(fraudService.saveTransaction(request))
-                .thenThrow(new RuntimeException("DB down"));
-
-        assertThrows(FraudProcessingException.class,
-                () -> orchestrator.process(request));
-    }
-
-    @Test
-    void should_handle_empty_rule_results() {
-        TransactionRequest request = new TransactionRequest("user1", 100, "ZA");
-
-        Transaction tx = Transaction.builder().id(1L).build();
-
-        when(fraudService.saveTransaction(request)).thenReturn(tx);
-        when(ruleEngine.evaluate(tx)).thenReturn(List.of());
-
-        FraudResponse response = orchestrator.process(request);
-
-        assertFalse(response.isFraudDetected());
+        verify(fraudService).saveAlert(eq(tx), any());
+        verify(fraudService).markCompleted(tx);
     }
 }

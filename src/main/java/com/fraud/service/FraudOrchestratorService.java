@@ -19,29 +19,36 @@ public class FraudOrchestratorService {
     private final RuleEngineService ruleEngine;
     private final FraudService fraudService;
 
-    public FraudResponse process(TransactionRequest request) {
+    public void process(Long transactionId, TransactionRequest request) {
 
         try {
-            log.info("event=process_transaction status=START userId={}", request.getUserId());
+            log.info("event=process_transaction status=START transactionId={}", transactionId);
 
-            Transaction transaction = fraudService.saveTransaction(request);
+            Transaction tx = fraudService.getById(transactionId);
 
-            List<RuleResult> results = ruleEngine.evaluate(transaction);
+            List<RuleResult> results = ruleEngine.evaluate(tx);
 
-            boolean fraudDetected = results.stream().anyMatch(RuleResult::isTriggered);
+            boolean fraudDetected =
+                    results.stream().anyMatch(RuleResult::isTriggered);
+
+            log.info("event=fraud_evaluation transactionId={} fraudDetected={}",
+                    transactionId, fraudDetected);
 
             if (fraudDetected) {
-                fraudService.saveAlert(transaction, results);
-                log.warn("event=fraud_detected transactionId={}", transaction.getId());
+                fraudService.saveAlert(tx, results);
+                log.warn("event=fraud_detected transactionId={}", transactionId);
             }
 
-            log.info("event=process_transaction status=SUCCESS transactionId={}", transaction.getId());
+            fraudService.markCompleted(tx);
 
-            return new FraudResponse(transaction.getId(), fraudDetected, results);
+            log.info("event=process_transaction status=COMPLETED transactionId={}", transactionId);
 
-        } catch (Exception exception) {
-            log.error("event=process_transaction status=FAILED error={}", exception.getMessage(), exception);
-            throw new FraudProcessingException("Failed to process transaction", exception);
+        } catch (Exception e) {
+            log.error("event=process_transaction status=FAILED transactionId={} error={}",
+                    transactionId, e.getMessage(), e);
+
+            fraudService.markFailed(transactionId);
+            throw new RuntimeException(e);
         }
     }
 }

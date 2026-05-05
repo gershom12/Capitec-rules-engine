@@ -1,8 +1,8 @@
 package com.fraud.kafka;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fraud.dto.TransactionRequest;
-import com.fraud.exception.FraudProcessingException;
 import com.fraud.service.FraudOrchestratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,18 +23,22 @@ public class TransactionConsumer {
         log.info("event=kafka_consume status=RECEIVED payload={}", message);
 
         try {
+            JsonNode node = mapper.readTree(message);
+
+            Long transactionId = node.get("transactionId").asLong();
+
             TransactionRequest request =
-                    mapper.readValue(message, TransactionRequest.class);
+                    mapper.treeToValue(node.get("payload"), TransactionRequest.class);
 
-            orchestrator.process(request);
+            log.info("event=kafka_consume status=PROCESSING transactionId={}", transactionId);
 
-            log.info("event=kafka_consume status=SUCCESS");
+            orchestrator.process(transactionId, request);
+
+            log.info("event=kafka_consume status=SUCCESS transactionId={}", transactionId);
 
         } catch (Exception e) {
             log.error("event=kafka_consume status=FAILED error={}", e.getMessage(), e);
-
-            // IMPORTANT: rethrow → triggers retry + DLQ
-            throw new FraudProcessingException("Kafka processing failed", e);
+            throw new RuntimeException(e);
         }
     }
 }

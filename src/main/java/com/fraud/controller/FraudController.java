@@ -1,8 +1,10 @@
 package com.fraud.controller;
 
-import com.fraud.dto.FraudResponse;
 import com.fraud.dto.TransactionRequest;
-import com.fraud.service.FraudOrchestratorService;
+import com.fraud.entity.Transaction;
+import com.fraud.kafka.TransactionProducer;
+import com.fraud.service.FraudService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -11,19 +13,35 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/fraud")
 @RequiredArgsConstructor
 @Slf4j
 public class FraudController {
 
-    private final FraudOrchestratorService orchestrator;
+    private final FraudService fraudService;
+    private final TransactionProducer producer;
 
     @PostMapping("/check")
-    public ResponseEntity<FraudResponse> check(@RequestBody TransactionRequest request) {
+    public ResponseEntity<?> check(@Valid @RequestBody TransactionRequest request) {
 
-        log.info("event=api_request endpoint=/check userId={}", request.getUserId());
+        log.info("event=api_request status=START userId={} amount={} location={}",
+                request.getUserId(), request.getAmount(), request.getLocation());
 
-        return ResponseEntity.ok(orchestrator.process(request));
+        Transaction tx = fraudService.createTransaction(request);
+
+        producer.send(tx.getId(), request);
+
+        log.info("event=api_request status=QUEUED transactionId={}", tx.getId());
+
+        return ResponseEntity.accepted().body(
+                Map.of(
+                        "transactionId", tx.getId(),
+                        "status", tx.getStatus(),
+                        "message", "Transaction queued for processing"
+                )
+        );
     }
 }

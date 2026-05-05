@@ -18,47 +18,59 @@ import java.util.List;
 @Slf4j
 public class FraudService {
 
-    private final TransactionRepository transactionRepo;
+    private final TransactionRepository txRepo;
     private final FraudAlertRepository alertRepo;
 
-    public Transaction saveTransaction(TransactionRequest req) {
+    public Transaction createTransaction(TransactionRequest req) {
 
-        try {
-            Transaction tx = Transaction.builder()
-                    .userId(req.getUserId())
-                    .amount(req.getAmount())
-                    .location(req.getLocation())
-                    .timestamp(LocalDateTime.now())
-                    .build();
+        Transaction tx = Transaction.builder()
+                .userId(req.getUserId())
+                .amount(req.getAmount())
+                .location(req.getLocation())
+                .timestamp(LocalDateTime.now())
+                .status("PROCESSING")
+                .build();
 
-            Transaction saved = transactionRepo.save(tx);
+        Transaction saved = txRepo.save(tx);
 
-            log.info("event=transaction_saved id={}", saved.getId());
+        log.info("event=db_insert transactionId={} userId={}",
+                saved.getId(), saved.getUserId());
 
-            return saved;
+        return saved;
+    }
 
-        } catch (Exception e) {
-            log.error("event=transaction_save_failed error={}", e.getMessage(), e);
-            throw new FraudProcessingException("DB error saving transaction", e);
-        }
+    public Transaction getById(Long id) {
+        return txRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+    }
+
+    public void markCompleted(Transaction tx) {
+        tx.setStatus("COMPLETED");
+        txRepo.save(tx);
+
+        log.info("event=transaction_completed transactionId={}", tx.getId());
+    }
+
+    public void markFailed(Long id) {
+        txRepo.findById(id).ifPresent(tx -> {
+            tx.setStatus("FAILED");
+            txRepo.save(tx);
+
+            log.error("event=transaction_failed transactionId={}", id);
+        });
     }
 
     public void saveAlert(Transaction tx, List<RuleResult> results) {
 
-        try {
-            FraudAlert alert = FraudAlert.builder()
-                    .transactionId(tx.getId())
-                    .rulesTriggered(results.toString())
-                    .createdAt(LocalDateTime.now())
-                    .build();
+        FraudAlert alert = FraudAlert.builder()
+                .transactionId(tx.getId())
+                .rulesTriggered(results.toString())
+                .createdAt(LocalDateTime.now())
+                .build();
 
-            alertRepo.save(alert);
+        alertRepo.save(alert);
 
-            log.warn("event=fraud_alert_saved transactionId={}", tx.getId());
-
-        } catch (Exception e) {
-            log.error("event=alert_save_failed error={}", e.getMessage(), e);
-            throw new FraudProcessingException("DB error saving alert", e);
-        }
+        log.warn("event=fraud_alert_saved transactionId={} rules={}",
+                tx.getId(), results);
     }
 }
