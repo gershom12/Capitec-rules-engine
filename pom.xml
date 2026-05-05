@@ -91,7 +91,6 @@
 
   </dependencies>
 
-  <!-- 🔥 THIS FIXES YOUR ISSUE -->
   <build>
     <plugins>
 
