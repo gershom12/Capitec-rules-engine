@@ -2,15 +2,54 @@
 
 ## 📌 Overview
 
-This system processes transaction events, applies fraud detection rules, and flags suspicious activity.
+This fraud detection system is designed using an event-driven, asynchronous architecture powered by Apache Kafka.
 
-It supports:
+Instead of processing transactions synchronously inside the REST API, every transaction is published to a Kafka topic and processed independently by a consumer service.
 
-- Real-time processing via Kafka
-- Rule-based fraud detection (extensible strategy engine)
-- REST API for manual checks
-- H2 in-memory persistence
-- Retry + Dead Letter Queue (DLQ)
+This design choice significantly improves scalability, resilience, and performance under load.
+
+
+🔹 Step 1:  API Layer (Fast Ingestion)
+
+    The REST API receives transaction requests
+    Performs basic validation only
+    Publishes the event to Kafka (transaction-topic)
+
+    Immediately returns a response:
+    {
+        "transactionId": 1,
+        "status": "PROCESSING",
+        "message": "Transaction queued for processing"
+    }
+
+🔹 Step 2: Kafka (Event Buffering Layer)
+
+    Kafka acts as a durable buffer and decoupling layer:
+
+    Stores transaction events
+    Guarantees delivery
+    Handles spikes in traffic
+    Enables retry and replay
+
+    This ensures the system is:
+
+    Fault tolerant
+    Horizontally scalable
+    Resilient to downstream failures
+
+
+🔹 Step 3: Consumer Layer (Fraud Engine)
+
+    A Kafka consumer processes transactions asynchronously:
+
+    Fetches transaction from DB
+    Executes rule engine:
+    HIGH VALUE rule
+    LOCATION mismatch rule
+    VELOCITY rule
+    Persists fraud results
+    Creates alerts if fraud is detected
+    Updates transaction status (COMPLETED / FAILED)
 
 ---
 
